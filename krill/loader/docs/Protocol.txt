@@ -1,0 +1,77 @@
+Two bits + ATN loader protocol
+------------------------------
+
+                  <---------------------------- INITIATE LOADING ---------------------->|
+                                                   |<--------- SEND NAME LOOP --------->|
+
+                  idle      request  | wait for    | send filename chars or file        | host clear|  busy
+                            service  | drive ready | starting track/sector to the drive | drive busy|
+
+Host DATA IN    0 _____ ... _________|_ ... ___|¯¯¯|XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX|XXXXXX_____|__ 0
+                                     |             |                                    |           |
+Host CLK IN     0 _____ ... _________|_ ... _______|__|¯¯¯|___|¯¯¯|___|¯¯¯|___|¯¯¯|_____|_____|¯¯¯¯¯|¯¯ 1
+                                     |             |                                    |           |
+Host DATA OUT   1 ¯¯¯¯¯ ... ¯¯¯¯|____|_ ... _______|____________________________________|___________|__ 0
+                                     |             |                                    |           |
+Host CLK OUT    1 ¯¯¯¯¯ ... ¯¯¯¯¯¯¯¯¯|¯ ... ¯¯¯¯¯¯¯|¯¯|___|¯¯¯|___|¯¯¯|___|¯¯¯|___|¯¯¯¯¯|¯¯¯¯¯|_____|__ 0
+                                     |             |                                    |           |
+Host ATN OUT    1 ¯¯¯¯¯ ... ¯¯¯¯|____|_ ... _______|XXXD0..D1..D2..D3..D4..D5..D6..D7XXX|XXXXXX¯¯¯¯¯|¯¯ 1
+                                     |             |                                    |           |
+                                     |             |                                    |           |
+Drive ATN IN    1 ¯¯¯¯¯ ... ¯¯¯¯|____|_ ... _______|XXXD0..D1..D2..D3..D4..D5..D6..D7XXX|XXXXXX¯¯¯¯¯|¯¯ 1
+                                     |             |                                    |           |
+Drive ATNA OUT  1 ¯¯¯¯¯ ... ¯¯¯¯¯¯¯¯¯|¯ ... ¯¯¯|___|____________________________________|_____|¯¯¯¯¯|¯¯ 1
+                                     |             |                                    |           |
+Drive CLK OUT   0 _____ ... _________|_ ... _______|____________________________________|___________|__ 0
+                                     |             |                                    |           |
+Drive CLK IN    1 ¯¯¯¯¯ ... ¯¯¯¯¯¯¯¯¯|¯ ... ¯¯¯¯¯¯¯|¯¯|___|¯¯¯|___|¯¯¯|___|¯¯¯|___|¯¯¯¯¯|___________|__ 0
+                                     |             |                                    |           |
+Drive DATA OUT  0 _____ ... _________|_ ... _______|____________________________________|_____|¯¯¯¯¯|¯¯ 1
+                                     |             |                                    |           |
+Drive DATA IN   1 ¯¯¯¯¯ ... ¯¯¯¯¯¯¯¯¯|¯ ... ¯¯¯|___|XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX|_____|¯¯¯¯¯|¯¯ 1
+
+   Host DATA OUT and ATN OUT 1 -> 0, | acking by   | host: clock out bits with CLK OUT  | busy by   |
+   DATA will remain asserted due to  | drive DATA  | as clock and ATN OUT as data,      | drv DATA  |
+   drive ATNA OUT = 1                | OUT 1 -> 0  | filename is 16 chars or            | OUT 0->1  |
+                                     |             | 0-terminated if fewer              |           |
+
+
+                        |<------------------- FETCH BLOCK OR STATUS (LOOPED) ------------------->|
+                                                      |<-- GET BLOCK LOOP -->|
+
+                  busy  | wait for     | send block   |   get a byte from    |   drive   | ack   | acknowledge   |  idle
+                        | the drive's  | start signal |   the drive          |   busy    | block | file transfer |
+                        | response     | to the drive |                      |           |       |               |
+
+Host DATA IN    0 ______|_ ... ___|¯¯¯¯|¯¯¯¯¯¯¯|______|..D1...D3...D5...D7...|......_____|_______|_______________|__ 0
+                        |              |              |                      |           |       |               |
+Host CLK IN     1 ¯¯¯¯¯¯|¯ ... ¯¯¯|____|______________|..D0...D2...D4...D6...|......¯¯¯¯¯|¯¯¯¯¯¯¯|_______________|__ 0
+                        |              |              |                      |           |       |               |
+Host DATA OUT   0 ______|_ ... ________|______________|______________________|___________|_______|_______|¯¯¯¯¯¯¯|¯¯ 1
+                        |              |              |                      |           |       |               |
+Host CLK OUT    0 ______|_ ... ________|______________|______________________|___________|_______|_______|¯¯¯¯¯¯¯|¯¯ 1
+                        |              |              |                      |           |       |               |
+Host ATN OUT    1 ¯¯¯¯¯¯|¯ ... ¯¯¯¯¯¯¯¯|¯¯¯¯¯¯¯|______|____|¯¯¯¯|____|¯¯¯¯|__|___________|___|¯¯¯|¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯|¯¯ 1
+                        |              |              |                      |           |       |               |
+                        |              |              |                      |           |       |               |
+Drive ATN IN    1 ¯¯¯¯¯¯|¯ ... ¯¯¯¯¯¯¯¯|¯¯¯¯¯¯¯|______|____|¯¯¯¯|____|¯¯¯¯|__|___________|___|¯¯¯|¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯|¯¯ 1
+                        |              |              |                      |           |       |               |
+Drive ATNA OUT  1 ¯¯¯¯¯¯|¯ ... ¯¯¯¯¯¯¯¯|¯¯¯¯¯¯¯¯¯¯¯¯¯¯|_____|¯¯¯¯|____|¯¯¯¯|_|_____|¯¯¯¯¯|¯¯¯¯¯¯¯|¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯|¯¯ 1
+                        |              |              |  __   __   __   __   |           |       |               |
+Drive CLK OUT   0 ______|_ ... ___|¯¯¯¯|¯¯¯¯¯¯¯¯¯¯¯¯¯¯|..D0...D2...D4...D6...|......_____|_______|_______________|__ 0
+                        |              |              |  __   __   __   __   |           |       |               |
+Drive CLK IN    0 ______|_ ... ___|¯¯¯¯|¯¯¯¯¯¯¯¯¯¯¯¯¯¯|..D0...D2...D4...D6...|......_____|_______|_______|¯¯¯¯¯¯¯|¯¯ 1
+                        |              |              |  __   __   __   __   |           |       |               |
+Drive DATA OUT  1 ¯¯¯¯¯¯|¯ ... ¯¯¯|____|______________|..D1...D3...D5...D7...|......¯¯¯¯¯|¯¯¯¯¯¯¯|¯¯¯¯¯¯¯|_______|__ 0
+                        |              |              |  __   __   __   __   |           |       |               |
+Drive DATA IN   1 ¯¯¯¯¯¯|¯ ... ¯¯¯|____|_______|¯¯¯¯¯¯|..D1...D3...D5...D7...|......¯¯¯¯¯|¯¯¯¯¯¯¯|¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯|¯¯ 1
+
+                        | drive: signal| host: ATN    | host: clock in       | drv DATA  | host: | host acking by
+                        | ready by DATA| OUT 1 -> 0   | bit pairs with       | OUT = 1   | ATN   | DATA OUT
+                        | OUT 1 -> 0,  |              | ATN OUT as clock,    |           | OUT   | and CLK OUT
+                        | CLK OUT 0->1,|              | last bit pair        |           | 0->1  | 0 -> 1:
+                        | then, if host|              | acknowledged with    |           |       | enter idle
+                        | CLK IN is    |              | ATN OUT 1 -> 0       |           |       | mode = host
+                        | set to 1, the|              |                      |           |       | ATN, CLK and
+                        | drive is not |              |                      |           |       | DATA OUT high,
+                        | present      |              |                      |           |       | drive ATNA high
