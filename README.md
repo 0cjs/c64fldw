@@ -26,6 +26,16 @@ describes several of the commerical fast load protocols.
   seems a few others (see the `doc/` directory in the repo). Epyx Fast
   Load has been confirmed experimentally.
 
+### Contents
+
+- __[SDOS V1.1](sdos/)__ (2019). A "C64 disk utility and speed loader."
+  Fast loader supports both Jiffy protcol drives and others, and a DOS
+  wedge is also included. Based on earlier programs VDOS (1986),
+  SJLOAD (v0.96, 2008-2009) and SDOS (v1.0, 2016).
+  - Source: <https://csdb.dk/release/?id=176967>
+  - Original source: <http://istennyila.hu/stuff/sdos.zip>.
+  - License: "Public Domain: open-source and freeware."
+
 
 
 <!-------------------------------------------------------------------->

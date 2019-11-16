@@ -1,0 +1,50 @@
+Version history (SDOS):
+
+
+v1.1	04/15/2019
+
+- LOAD without filename means to load first file
+- device number 8 is substitute for last accessed device
+- device number 1 is also substitute (and works for more setups)
+- name can now be longer (not only a single character)
+- more practical memory management and code structure
+- more useful and better looking directory listing
+- greater loadable file size (200 blocks)
+- no saving to new disk any more
+- a lot of other changes
+
+
+v1.0	01/31/2016
+
+- formerly called as SDOS 2016
+
+
+v0.96	10/03/2009
+
+- formerly called as SJLOAD (by "1570")
+
+
+N/A	1986
+
+- formerly called as VDOS (by Edward Carroll)
+
+
+SDOS is freeware and open-source and can be downloaded here:
+
+---------------------------------------------------------------
+http://istennyila.hu/stuff/sdos.zip
+---------------------------------------------------------------
+
+SDOS project page:
+
+http://istennyila.hu/sdos
+
+MemTest64 project homepage:
+
+http://istennyila.hu/memtest64
+
+Rosetta Interactive Fiction project homepage:
+
+http://istennyila.hu/rosetta
+
+(c) 2012-2019 by Robert Olessak

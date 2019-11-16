@@ -1,0 +1,1784 @@
+
+00001  0000             
+00002  0001                        ;       SDOS (LEGACY) - USE TO BE CALLED AS "!"
+00003  0001             
+00004  0001                        ;       SDOS (V1.1) - C64 FLOPPY SPEEDER AND DISK UTILITY
+00005  0001                        ;       1986/2008/2016-2019 BY CARROLL/1570/OLESSAK
+00006  0001                        ;       PUBLIC DOMAIN (OPEN-SOURCE AND FREEWARE)
+00007  0001             
+00008  0001                        ;       VDOS IS WRITTEN BY EDWARD CARROLL (IN 1986);
+00009  0001                        ;       DISASSEMBLED AND MODIFIED FOR JIFFY PROTOCOL BY 1570 (IN 2008);
+00010  0001                        ;       BOTH SOURCES ARE RE-ASSEMBLED BY ROBERT OLESSAK (IN 2016-2019).
+00011  0001             
+00012  0001                        ;       SDOS IS BASED ON SJLOAD AND VDOS. THIS IS A COMMON BOOT LOADER
+00013  0001                        ;       THAT CHECKS THE DRIVE AND CHOOSES AMONG THREE POSSIBILITIES:
+00014  0001             
+00015  0001                        ;       1.) IF JIFFYDOS PROTOCOL IS SUPPORTED, IT STARTS AS SJLOAD;
+00016  0001                        ;       2.) IF NOT, IT TRIES TO START AS VDOS (WHICH IS POSSIBLE ON
+00017  0001                        ;           1541 AND 1571 DRIVES IN C64 MODE);
+00018  0001                        ;       3.) IF NONE OF THEM ARE PRESENT, IT STAYS AT KERNAL LOAD.
+00019  0001             
+00020  0001                        ;       STARTING (IN ALL CASES):
+00021  0001             
+00022  0001                        ;       LOAD"!*PROGRAM",8(,1) - (AUTO)START SDOS, FASTLOAD PROGRAM
+00023  0001                        ;       LOAD"!",8(,1) RUN - (AUTO)START ONLY SDOS
+00024  0001             
+00025  0001                        ;       (ON 1581 THE * DOES NOT WORK, SO PLEASE TYPE = INSTEAD)
+00026  0001             
+00027  0001                        ;       USAGE (AFTER HAVING BEEN INSTALLED):
+00028  0001             
+00029  0001                        ;       VERIFY - SEND COMMANDS, READ FLOPPY STATUS
+00030  0001                        ;       VERIFY"$" - DISPLAY DIRECTORY
+00031  0001             
+00032  0001                        ;       LOAD"$" - LOAD DIRECTORY FROM LAST ACCESSED DEVICE
+00033  0001                        ;       LOAD"PROGRAM" - LOAD PROGRAM FROM LAST ACCESSED DEVICE
+00034  0001                        ;       LOAD"PROGRAM"(,8),1 - AS ABOVE (AS A MACHINE CODE)
+00035  0001                        ;       LOAD"PROGRAM"(,8),0 - AS ABOVE (AS A BASIC CODE)
+00036  0001             
+00037  0001                        ;       LOAD (WITHOUT FILENAME) => LOAD"?*",8(,1) (LOAD FIRST FILE)
+00038  0001             
+00039  0001                        ;       THE LOADER USES $02A7-$02FF AND $CF00-$CFFF AS FRAMEWORK AREA
+00040  0001                        ;       WHEN ACTIVE AND $FC00-$FFFF WHEN HIDING (UNDER KERNAL ROM).
+00041  0001             
+00042  0001                        ;       THE LENGTH OF PROGRAMS LOADED TO THE BASIC START CAN BE ABOUT
+00043  0001                        ;       200 BLOCKS AT MOST (FROM $0801 UNTIL $CEFF) APPROXIMATELY.
+00044  0001             
+00045  0001                        ;       NEW FEATURES:
+00046  0001             
+00047  0001                        ;       IF USING LOAD"!*PROGRAM",8(,1) THE PROGRAM WILL ALSO BE AUTORUN
+00048  0001                        ;       HOLDING SHIFT KEY SKIPS THE AUTORUN
+00049  0001                        ;       HOLDING C= KEY FORCES ALWAYS VDOS (ALSO SKIPS DRIVE CHECK)
+00050  0001                        ;       HOLDING CTRL KEY FORCES ALWAYS SJLOAD (ALSO SKIPS DRIVE CHECK)
+00051  0001                        ;       HOLDING BOTH C= AND CTRL KEYS AT ONCE FORCES ALWAYS KERNAL LOAD
+00052  0001                        ;       SCREEN AND IRQ ARE DISABLED WHILE LOADING (IN ALL THREE MODES)
+00053  0001                        ;       TYPING 0 OR 1 FOR DEVICE NUMBER MEANS LATEST WITH ,0 OR ,1
+00054  0001                        ;       TYPING NO DEVICE NUMBER AT ALL MEANS LATEST ONCE AGAIN
+00055  0001                        ;       NUMBER 8 IS SUBSTITUTE FOR LAST ACCESSED DEVICE
+00056  0001                        ;       SPECIFYING NO FILENAME MEANS LOAD FIRST FILE
+00057  0001                        ;       (PLUS SEVERAL FURTHER MINOR BUGFIXES)
+00058  0001             
+00059  0001                        ;       AT ANY TIME IT CAN BE RE-INSTALLED BY SYS737
+00060  0001                        ;       AT ANY TIME IT CAN BE UN-INSTALLED BY SYS700
+00061  0001             
+00062  0001                        ;       MEMORY SWAPPING CAN BE DISABLED BY SYS727
+00063  0001             
+00064  0001                        ;       (NORMALLY THE CODE RESIDES IN THE "HIDDEN" RAM UNDER THE KERNAL
+00065  0001                        ;       AREA, AND IS BROUGHT FORTH TO $CC00 ONLY DURING LOADING, THEN
+00066  0001                        ;       AFTERWARDS SWAPPED THERE BACK. SO REMAINS THE $CC00-$CFFF AREA
+00067  0001                        ;       UNTOUCHED AND STAYS USABLE FOR ANY OTHER PURPOSES. YOU MAY
+00068  0001                        ;       SWITCH THIS FEATURE OFF IF YOU DO NOT NEED IT - TO MAKE THINGS
+00069  0001                        ;       FASTER, OR TO ALSO USE THE "HIDDEN" RAM.)
+00070  0001             
+00071  0001             *=$0326
+00072  0326             
+00073  0326                        ;       CHROUT AND STOP VECTOR <= BASIC CHAINING + LINE NUMBER
+00074  0326             
+00075  0326  3C 03 ED              WORD    SETUP,$F6ED
+00076  032A             
+00077  032A                        ;       63213 SYSPEEK(44)*256+2248
+00078  032A             
+00079  032A  9E C2 28              BYTE    $9E,$C2,$28,$34,$34,$29,$AC,$32,$35,$36,$AA,$32,$32,$34,$38,$00
+00080  033A  00 00                 BYTE    $00,$00
+00081  033C             
+00082  033C                        ;       (* = $033C) <- (* = $0817) <- BASIC START
+00083  033C             
+00084  033C                        ;       ----------------------------------------
+00085  033C                        ;       SETUP INIT (ENTRY POINT FOR AUTOSTART)
+00086  033C                        ;       ----------------------------------------
+00087  033C             
+00088  033C  20 C2 0A   SETUP      JSR     RESET
+00089  033F  20 3B 0B              JSR     RWAP
+00090  0342             
+00091  0342  A0 00                 LDY     #$00
+00092  0344  A2 10                 LDX     #$10
+00093  0346             
+00094  0346  B9 04 FA   STP        LDA     LCC03-$0C03,Y
+00095  0349  99 00 C0              STA     $C000,Y
+00096  034C  C8                    INY
+00097  034D  D0 F7                 BNE     STP
+00098  034F             
+00099  034F  EE 48 03              INC     STP+2
+00100  0352  EE 4B 03              INC     STP+5
+00101  0355  CA                    DEX
+00102  0356  D0 EE                 BNE     STP
+00103  0358             
+00104  0358  98                    TYA
+00105  0359  86 2B                 STX     $2B
+00106  035B  91 2B                 STA     ($2B),Y
+00107  035D  E6 2B                 INC     $2B
+00108  035F             
+00109  035F  20 6A CE              JSR     $CE6A
+00110  0362  20 1C 0B              JSR     DRIVE
+00111  0365             
+00112  0365  20 44 A6              JSR     $A644
+00113  0368             
+00114  0368  C6 B7                 DEC     $B7
+00115  036A  30 26                 BMI     BASC
+00116  036C             
+00117  036C  A6 2B                 LDX     $2B
+00118  036E  A4 2C                 LDY     $2C
+00119  0370             
+00120  0370  20 D5 FF              JSR     $FFD5
+00121  0373  B0 1D                 BCS     BASC
+00122  0375             
+00123  0375  86 2D                 STX     $2D
+00124  0377  84 2E                 STY     $2E
+00125  0379             
+00126  0379  20 33 A5              JSR     $A533
+00127  037C             
+00128  037C  A9 00      ATP        LDA     #$00
+00129  037E  A2 05                 LDX     #$05
+00130  0380  0D 8D 02              ORA     $028D
+00131  0383  29 01                 AND     #$01
+00132  0385  D0 0B                 BNE     BASC
+00133  0387             
+00134  0387  86 C6                 STX     $C6
+00135  0389             
+00136  0389  BD 94 03   RTP        LDA     RUN-1,X
+00137  038C  CA                    DEX
+00138  038D  9D 77 02              STA     $0277,X
+00139  0390  D0 F7                 BNE     RTP
+00140  0392             
+00141  0392                        ;       BASIC WARM START
+00142  0392             
+00143  0392  6C 02 A0   BASC       JMP     ($A002)
+00144  0395             
+00145  0395             *=$0395
+00146  0395             
+00147  0395                        ;       "RUN" (INTO KEYBOARD BUFFER)
+00148  0395             
+00149  0395  93 52 55   RUN        BYTE    $93,$52,$55,$4E,$0D
+00150  039A             
+00151  039A                        ;       (* = $039A)
+00152  039A             
+00153  039A                        ;       ----------------------------------------
+00154  039A                        ;       SJLOAD ($CC99-$CF05) <- ($C996-$CC02)
+00155  039A                        ;       ----------------------------------------
+00156  039A             
+00157  039A  60         SCC99      BYTE    $60
+00158  039B  85 B9                 STA     $B9
+00159  039D  20 D5 F3              JSR     $F3D5
+00160  03A0             
+00161  03A0  A5 BA      SCC9F      LDA     $BA
+00162  03A2  20 B4 FF              JSR     $FFB4
+00163  03A5  A5 B9                 LDA     $B9
+00164  03A7  4C 96 FF              JMP     $FF96
+00165  03AA             
+00166  03AA  C9 40      SCCA9      CMP     #$40
+00167  03AC  A6 B7                 LDX     $B7
+00168  03AE             
+00169  03AE                        ;        (BEQ INSTEAD OF JMP $CC6F)
+00170  03AE             
+00171  03AE  F0 C0                 BYTE    $F0,$C0
+00172  03B0             
+00173  03B0                        ;       SEND DRIVE COMMAND
+00174  03B0             
+00175  03B0  A5 BA                 LDA     $BA
+00176  03B2  90 12                 BCC     SCCC5
+00177  03B4             
+00178  03B4  20 B1 FF              JSR     $FFB1
+00179  03B7  A9 6F                 LDA     #$6F
+00180  03B9  20 93 FF              JSR     $FF93
+00181  03BC             
+00182  03BC  B1 BB      SCCBB      LDA     ($BB),Y
+00183  03BE  20 A8 FF              JSR     $FFA8
+00184  03C1  C8                    INY
+00185  03C2  C4 B7                 CPY     $B7
+00186  03C4  90 F6                 BCC     SCCBB
+00187  03C6             
+00188  03C6  20 AE FF   SCCC5      JSR     $FFAE
+00189  03C9  4C 8C CC              JMP     $CC8C
+00190  03CC             
+00191  03CC                        ;       ACTUAL LOAD ROUTINE (FROM BELOW CONTINUED)
+00192  03CC                        ;       (CHECKING IF "$" AND/OR LOAD/VERIFY WITH OR WITHOUT FILENAME)
+00193  03CC             
+00194  03CC  B1 BB      SCCCB      LDA     ($BB),Y
+00195  03CE             
+00196  03CE  C9 24                 CMP     #$24
+00197  03D0  8C 30 D0              STY     $D030
+00198  03D3  D0 09                 BNE     SCCDD
+00199  03D5             
+00200  03D5  A5 93                 LDA     $93
+00201  03D7  D0 4A                 BNE     SCD22
+00202  03D9  85 B9                 STA     $B9
+00203  03DB             
+00204  03DB  6C 73 CF              JMP     ($CF73)
+00205  03DE             
+00206  03DE  A6 93      SCCDD      LDX     $93
+00207  03E0  D0 C8                 BNE     SCCA9
+00208  03E2             
+00209  03E2  A6 B7                 LDX     $B7
+00210  03E4  D0 0A                 BNE     SCCEF
+00211  03E6             
+00212  03E6  A9 02                 LDA     #$02
+00213  03E8  A2 CD                 LDX     #$CD
+00214  03EA  85 B7                 STA     $B7
+00215  03EC  85 BB                 STA     $BB
+00216  03EE  86 BC                 STX     $BC
+00217  03F0             
+00218  03F0                        ;       TURN OFF SCREEN + IRQ (BEFORE SJLOAD CALL)
+00219  03F0             
+00220  03F0  08         SCCEF      PHP
+00221  03F1  78                    SEI
+00222  03F2  68                    PLA
+00223  03F3  AC 11 D0              LDY     $D011
+00224  03F6  A2 0B                 LDX     #$0B
+00225  03F8  8E 11 D0              STX     $D011
+00226  03FB  8D 09 CF              STA     $CF09
+00227  03FE  8C 10 CF              STY     $CF10
+00228  0401  D0 23                 BNE     SCD25
+00229  0403             
+00230  0403                        ;       "?*" (FILENAME AT $CD02)
+00231  0403             
+00232  0403  3F 2A 00   SCD02      BYTE    $3F,$2A,$00
+00233  0406             
+00234  0406                        ;       LOAD/VERIFY
+00235  0406             
+00236  0406  85 93      SCD05      STA     $93
+00237  0408             
+00238  0408  A5 BA                 LDA     $BA
+00239  040A  C9 08                 CMP     #$08
+00240  040C  F0 08                 BEQ     SCD15
+00241  040E  C9 02                 CMP     #$02
+00242  0410  B0 08                 BCS     SCD19
+00243  0412  25 B9                 AND     $B9
+00244  0414  85 B9                 STA     $B9
+00245  0416             
+00246  0416                        ;       LAST ACCESSED DEVICE
+00247  0416             
+00248  0416  A5 A8      SCD15      LDA     $A8
+00249  0418  85 BA                 STA     $BA
+00250  041A             
+00251  041A  A0 00      SCD19      LDY     #$00
+00252  041C  8C 15 D0              STY     $D015
+00253  041F  85 A8                 STA     $A8
+00254  0421             
+00255  0421  F0 A9                 BEQ     SCCCB
+00256  0423             
+00257  0423  4C 03 CC   SCD22      JMP     $CC03
+00258  0426             
+00259  0426                        ;       "SEARCHING FOR..."
+00260  0426             
+00261  0426  20 AF F5   SCD25      JSR     $F5AF
+00262  0429             
+00263  0429  A9 60                 LDA     #$60
+00264  042B  A6 B9                 LDX     $B9
+00265  042D  85 B9                 STA     $B9
+00266  042F             
+00267  042F                        ;       RASTER SYNCHRONIZATION (HAVING THE SCREEN TURNED OFF)
+00268  042F             
+00269  042F  2C 11 D0   SD1        BIT     $D011
+00270  0432  10 FB                 BPL     SD1
+00271  0434             
+00272  0434  2C 11 D0   SD2        BIT     $D011
+00273  0437  30 FB                 BMI     SD2
+00274  0439             
+00275  0439  20 D5 F3              JSR     $F3D5
+00276  043C             
+00277  043C                        ;       START ADDRESS
+00278  043C             
+00279  043C  78                    SEI
+00280  043D  A5 BA                 LDA     $BA
+00281  043F  20 07 CE              JSR     $CE07
+00282  0442  A5 B9                 LDA     $B9
+00283  0444  20 90 CE              JSR     $CE90
+00284  0447             
+00285  0447  20 BB CE              JSR     $CEBB
+00286  044A  85 AE                 STA     $AE
+00287  044C             
+00288  044C  A5 90                 LDA     $90
+00289  044E  4A                    LSR
+00290  044F  4A                    LSR
+00291  0450  B0 36                 BCS     LENDS
+00292  0452             
+00293  0452  20 BB CE              JSR     $CEBB
+00294  0455  85 AF                 STA     $AF
+00295  0457             
+00296  0457  E6 B9                 INC     $B9
+00297  0459  20 A0 CE              JSR     $CEA0
+00298  045C  A5 BA                 LDA     $BA
+00299  045E  20 07 CE              JSR     $CE07
+00300  0461  A5 B9                 LDA     $B9
+00301  0463  20 90 CE              JSR     $CE90
+00302  0466  C6 B9                 DEC     $B9
+00303  0468             
+00304  0468  E0 01                 CPX     #$01
+00305  046A  A2 00                 LDX     #$00
+00306  046C  B0 07                 BCS     LAFF
+00307  046E             
+00308  046E  A5 C3                 LDA     $C3
+00309  0470  85 AE                 STA     $AE
+00310  0472  A5 C4                 LDA     $C4
+00311  0474  2C                    BYTE    $2C
+00312  0475             
+00313  0475  A5 AF      LAFF       LDA     $AF
+00314  0477             
+00315  0477                        ;       CONTROL DATA POINTER ($CC00-$CFCF AND $FC00-$FFCF SWAPPED!)
+00316  0477             
+00317  0477  C9 CC      LCONTR     CMP     #$CC
+00318  0479  85 AF      LAONTR     STA     $AF
+00319  047B  90 06                 BCC     LXONTR
+00320  047D             
+00321  047D  C9 CF                 CMP     #$CF
+00322  047F  09 30                 ORA     #$30
+00323  0481  90 F6                 BCC     LAONTR
+00324  0483             
+00325  0483  8A         LXONTR     TXA
+00326  0484  D0 21                 BNE     LTRBYT
+00327  0486  F0 06                 BEQ     LLDBS2
+00328  0488             
+00329  0488                        ;       FILE NOT FOUND ERROR
+00330  0488             
+00331  0488  20 07 CF   LENDS      JSR     $CF07
+00332  048B  4C 04 F7              JMP     $F704
+00333  048E             
+00334  048E                        ;       LOAD MESSAGE
+00335  048E             
+00336  048E  20 D2 F5   LLDBS2     JSR     $F5D2
+00337  0491             
+00338  0491  A0 00                 LDY     #$00
+00339  0493             
+00340  0493                        ;       START LOADING
+00341  0493             
+00342  0493  CA         LJLW       DEX
+00343  0494  D0 FD                 BNE     LJLW
+00344  0496             
+00345  0496  A9 03      LLNRLP     LDA     #$03
+00346  0498  8D 00 DD              STA     $DD00
+00347  049B             
+00348  049B  2C 00 DD   LWCH1      BIT     $DD00
+00349  049E  50 FB                 BVC     LWCH1
+00350  04A0  30 3D                 BMI     LPDRSG
+00351  04A2             
+00352  04A2  2C 00 DD   LTRBLK     BIT     $DD00
+00353  04A5  10 FB                 BPL     LTRBLK
+00354  04A7             
+00355  04A7  78         LTRBYT     SEI
+00356  04A8  A1 00                 LDA     ($00,X)
+00357  04AA  A2 23                 LDX     #$23
+00358  04AC  A9 03                 LDA     #$03
+00359  04AE  8E 00 DD              STX     $DD00
+00360  04B1  2C 00 DD              BIT     $DD00
+00361  04B4  50 E0                 BVC     LLNRLP
+00362  04B6             
+00363  04B6  EA                    NOP
+00364  04B7  8D 00 DD              STA     $DD00
+00365  04BA  AD 00 DD              LDA     $DD00
+00366  04BD  EA                    NOP
+00367  04BE  4A                    LSR
+00368  04BF  4A                    LSR
+00369  04C0  4D 00 DD              EOR     $DD00
+00370  04C3  24 00                 BIT     $00
+00371  04C5  4A                    LSR
+00372  04C6  4A                    LSR
+00373  04C7  4D 00 DD              EOR     $DD00
+00374  04CA  24 00                 BIT     $00
+00375  04CC  4A                    LSR
+00376  04CD  4A                    LSR
+00377  04CE  4D 00 DD              EOR     $DD00
+00378  04D1  49 03                 EOR     #$03
+00379  04D3  91 AE                 STA     ($AE),Y
+00380  04D5             
+00381  04D5                        ;       INCREMENT DATA POINTER
+00382  04D5             
+00383  04D5  E6 AE                 INC     $AE
+00384  04D7  D0 CE                 BNE     LTRBYT
+00385  04D9             
+00386  04D9  E6 AF                 INC     $AF
+00387  04DB  D0 98                 BNE     LAFF
+00388  04DD             
+00389  04DD  68                    PLA
+00390  04DE  68                    PLA
+00391  04DF             
+00392  04DF  A2 64      LPDRSG     LDX     #$64
+00393  04E1             
+00394  04E1  2C 00 DD   LWOK1      BIT     $DD00
+00395  04E4  50 06                 BVC     LEND2
+00396  04E6  CA                    DEX
+00397  04E7  D0 F8                 BNE     LWOK1
+00398  04E9             
+00399  04E9  A9 42                 LDA     #$42
+00400  04EB  2C                    BYTE    $2C
+00401  04EC             
+00402  04EC  A9 40      LEND2      LDA     #$40
+00403  04EE  20 1C FE              JSR     $FE1C
+00404  04F1  20 A0 CE              JSR     $CEA0
+00405  04F4  20 42 F6              JSR     $F642
+00406  04F7  B0 8F                 BCS     LENDS
+00407  04F9             
+00408  04F9                        ;       RETURN FROM THE LOAD ROUTINE (THROUGH KERNAL)
+00409  04F9             
+00410  04F9  20 07 CF   LEND3      JSR     $CF07
+00411  04FC  4C AA F5              JMP     $F5AA
+00412  04FF             
+00413  04FF                        ;       (* = $CDFE)
+00414  04FF             
+00415  04FF  A9 08                 LDA     #$08
+00416  0501  0D 00 DD              ORA     $DD00
+00417  0504  8D 00 DD              STA     $DD00
+00418  0507  60                    RTS
+00419  0508             
+00420  0508                        ;       (* = $CE07) TALK
+00421  0508             
+00422  0508  09 40      LTALK      ORA     #$40
+00423  050A             
+00424  050A                        ;       (* = $CE09)
+00425  050A             
+00426  050A  85 95      LSENDB     STA     $95
+00427  050C  20 97 EE              JSR     $EE97
+00428  050F  C9 3F                 CMP     #$3F
+00429  0511  D0 03                 BNE     LCA1
+00430  0513  20 85 EE              JSR     $EE85
+00431  0516             
+00432  0516  20 FE CD   LCA1       JSR     $CDFE
+00433  0519             
+00434  0519                        ;       (* = $CE18) SEND IEC BYTE
+00435  0519             
+00436  0519  20 8E EE   LWIECS     JSR     $EE8E
+00437  051C  20 97 EE              JSR     $EE97
+00438  051F  20 B3 EE              JSR     $EEB3
+00439  0522  20 A9 EE              JSR     $EEA9
+00440  0525  90 06                 BCC     LCONT1
+00441  0527             
+00442  0527                        ;       DEVICE NOT FOUND
+00443  0527             
+00444  0527  20 07 CF              JSR     $CF07
+00445  052A  4C AD ED              JMP     $EDAD
+00446  052D             
+00447  052D  20 85 EE   LCONT1     JSR     $EE85
+00448  0530             
+00449  0530  20 A9 EE   LCONT4     JSR     $EEA9
+00450  0533  90 FB                 BCC     LCONT4
+00451  0535             
+00452  0535  20 8E EE              JSR     $EE8E
+00453  0538             
+00454  0538  8A                    TXA
+00455  0539  48                    PHA
+00456  053A  A2 08                 LDX     #$08
+00457  053C             
+00458  053C  C1 00      LSDBTS     CMP     ($00,X)
+00459  053E             
+00460  053E  2C 00 DD              BIT     $DD00
+00461  0541  10 46                 BPL     LTBOUT
+00462  0543             
+00463  0543  20 97 EE   LCONT5     JSR     $EE97
+00464  0546             
+00465  0546  66 95                 ROR     $95
+00466  0548  B0 03                 BCS     LCI1
+00467  054A             
+00468  054A  20 A0 EE              JSR     $EEA0
+00469  054D             
+00470  054D  20 85 EE   LCI1       JSR     $EE85
+00471  0550             
+00472  0550  AD 00 DD              LDA     $DD00
+00473  0553  29 DF                 AND     #$DF
+00474  0555  09 10                 ORA     #$10
+00475  0557             
+00476  0557                        ;       SEND TWO BITS
+00477  0557             
+00478  0557  8D 00 DD              STA     $DD00
+00479  055A  29 08                 AND     #$08
+00480  055C  F0 1B                 BEQ     LTWBST
+00481  055E             
+00482  055E  A5 95                 LDA     $95
+00483  0560  6A                    ROR
+00484  0561  6A                    ROR
+00485  0562             
+00486  0562  E0 02                 CPX     #$02
+00487  0564  D0 13                 BNE     LTWBST
+00488  0566             
+00489  0566  A2 1E                 LDX     #$1E
+00490  0568             
+00491  0568  2C 00 DD   LWACK1     BIT     $DD00
+00492  056B  10 05                 BPL     LWACK2
+00493  056D             
+00494  056D  CA                    DEX
+00495  056E  D0 F8                 BNE     LWACK1
+00496  0570  F0 05                 BEQ     LCONT6
+00497  0572             
+00498  0572  2C 00 DD   LWACK2     BIT     $DD00
+00499  0575  10 FB                 BPL     LWACK2
+00500  0577             
+00501  0577                        ;       WHEN WE ARE HERE JD IS PRESENT IN FLOPPY
+00502  0577             
+00503  0577  A2 02      LCONT6     LDX     #$02
+00504  0579             
+00505  0579  CA         LTWBST     DEX
+00506  057A  D0 C0                 BNE     LSDBTS
+00507  057C             
+00508  057C  A2 56                 LDX     #$56
+00509  057E             
+00510  057E  CA         LCONT7     DEX
+00511  057F  F0 08                 BEQ     LTBOUT
+00512  0581             
+00513  0581  AD 00 DD              LDA     $DD00
+00514  0584  30 F8                 BMI     LCONT7
+00515  0586             
+00516  0586  68         LTBOK      PLA
+00517  0587  AA                    TAX
+00518  0588             
+00519  0588  60                    RTS
+00520  0589             
+00521  0589  68         LTBOUT     PLA
+00522  058A  AA                    TAX
+00523  058B             
+00524  058B                        ;       TIMEOUT
+00525  058B             
+00526  058B  20 07 CF              JSR     $CF07
+00527  058E  4C B0 ED              JMP     $EDB0
+00528  0591             
+00529  0591                        ;       (* = $CE90) SEND SECONDARY ADDRESS
+00530  0591             
+00531  0591  85 95      LSNDSA     STA     $95
+00532  0593  20 18 CE              JSR     $CE18
+00533  0596             
+00534  0596  A9 23                 LDA     #$23
+00535  0598  8D 00 DD              STA     $DD00
+00536  059B             
+00537  059B  2C 00 DD   LWCA1      BIT     $DD00
+00538  059E  70 FB                 BVS     LWCA1
+00539  05A0             
+00540  05A0  60                    RTS
+00541  05A1             
+00542  05A1                        ;       (* = $CEA0) UNTALK
+00543  05A1             
+00544  05A1  20 FE CD   LUNTLK     JSR     $CDFE
+00545  05A4             
+00546  05A4  20 8E EE              JSR     $EE8E
+00547  05A7  A9 5F                 LDA     #$5F
+00548  05A9  20 09 CE              JSR     $CE09
+00549  05AC  20 BE ED              JSR     $EDBE
+00550  05AF  8A                    TXA
+00551  05B0  A2 0A                 LDX     #$0A
+00552  05B2             
+00553  05B2  CA         LL2        DEX
+00554  05B3  D0 FD                 BNE     LL2
+00555  05B5             
+00556  05B5  AA                    TAX
+00557  05B6  20 85 EE              JSR     $EE85
+00558  05B9  4C 97 EE              JMP     $EE97
+00559  05BC             
+00560  05BC                        ;       (* = $CEBB) IECIN (JUMPED FROM $EE13)
+00561  05BC             
+00562  05BC  AD 00 DD   LL3        LDA     $DD00
+00563  05BF  C9 40                 CMP     #$40
+00564  05C1  90 F9                 BCC     LL3
+00565  05C3             
+00566  05C3  78                    SEI
+00567  05C4  EA                    NOP
+00568  05C5  C1 00                 CMP     ($00,X)
+00569  05C7  C1 00                 CMP     ($00,X)
+00570  05C9  A9 03                 LDA     #$03
+00571  05CB  EA                    NOP
+00572  05CC  EA                    NOP
+00573  05CD  8D 00 DD              STA     $DD00
+00574  05D0  C1 00                 CMP     ($00,X)
+00575  05D2  C1 00                 CMP     ($00,X)
+00576  05D4  0D 00 DD              ORA     $DD00
+00577  05D7  4A                    LSR
+00578  05D8  4A                    LSR
+00579  05D9  EA                    NOP
+00580  05DA  0D 00 DD              ORA     $DD00
+00581  05DD  4A                    LSR
+00582  05DE  4A                    LSR
+00583  05DF  49 03                 EOR     #$03
+00584  05E1  4D 00 DD              EOR     $DD00
+00585  05E4  4A                    LSR
+00586  05E5  4A                    LSR
+00587  05E6  49 03                 EOR     #$03
+00588  05E8  EA                    NOP
+00589  05E9  4D 00 DD              EOR     $DD00
+00590  05EC  48                    PHA
+00591  05ED  A9 23                 LDA     #$23
+00592  05EF  2C 00 DD              BIT     $DD00
+00593  05F2  8D 00 DD              STA     $DD00
+00594  05F5  50 0D                 BVC     LEND1
+00595  05F7  10 06                 BPL     LERR1
+00596  05F9             
+00597  05F9  68                    PLA
+00598  05FA  A9 42                 LDA     #$42
+00599  05FC  4C B2 ED              JMP     $EDB2
+00600  05FF             
+00601  05FF  A9 40      LERR1      LDA     #$40
+00602  0601  20 1C FE              JSR     $FE1C
+00603  0604             
+00604  0604  68         LEND1      PLA
+00605  0605  18                    CLC
+00606  0606             
+00607  0606  60         LCRTS      RTS
+00608  0607             
+00609  0607                        ;       (* = $0607) <- (* = $CF06)
+00610  0607             
+00611  0607                        ;       ----------------------------------------
+00612  0607                        ;       VDOS ($CC03-$CF77)
+00613  0607                        ;       ----------------------------------------
+00614  0607             
+00615  0607                        ;       PRINT DIRECTORY
+00616  0607             
+00617  0607  20 86 CE   LCC03      JSR     $CE86
+00618  060A  20 8D CE              JSR     $CE8D
+00619  060D             
+00620  060D  20 54 CC              JSR     $CC54
+00621  0610             
+00622  0610  86 A9      LCC0C      STX     $A9
+00623  0612  20 D7 AA              JSR     $AAD7
+00624  0615             
+00625  0615  20 51 CC              JSR     $CC51
+00626  0618             
+00627  0618  20 CD BD              JSR     $BDCD
+00628  061B  20 3F AB              JSR     $AB3F
+00629  061E             
+00630  061E  20 58 CC   LCC1A      JSR     $CC58
+00631  0621             
+00632  0621  AA                    TAX
+00633  0622  F0 EC                 BEQ     LCC0C
+00634  0624             
+00635  0624  C9 22                 CMP     #$22
+00636  0626  D0 02                 BNE     LCC26
+00637  0628  85 A9                 STA     $A9
+00638  062A             
+00639  062A  A4 D3      LCC26      LDY     $D3
+00640  062C  A9 3A                 LDA     #$3A
+00641  062E  C0 1C                 CPY     #$1C
+00642  0630  F0 10                 BEQ     LCC3E
+00643  0632  B0 EA                 BCS     LCC1A
+00644  0634             
+00645  0634  C0 18                 CPY     #$18
+00646  0636  90 17                 BCC     LCC4B
+00647  0638  D0 11                 BNE     LCC47
+00648  063A             
+00649  063A  A9 2C                 LDA     #$2C
+00650  063C  E0 20                 CPX     #$20
+00651  063E  F0 02                 BEQ     LCC3E
+00652  0640             
+00653  0640  E0 40                 CPX     #$40
+00654  0642  A4 A9      LCC3E      LDY     $A9
+00655  0644  F0 D8                 BEQ     LCC1A
+00656  0646  90 07                 BCC     LCC4B
+00657  0648             
+00658  0648  20 D2 FF              JSR     $FFD2
+00659  064B             
+00660  064B  E0 3C      LCC47      CPX     #$3C
+00661  064D  90 CF                 BCC     LCC1A
+00662  064F             
+00663  064F  8A         LCC4B      TXA
+00664  0650  20 D2 FF              JSR     $FFD2
+00665  0653  90 C9                 BCC     LCC1A
+00666  0655             
+00667  0655                        ;       GET SERIAL BYTE (WITH ERROR HANDLING)
+00668  0655             
+00669  0655  20 54 CC   LCC51      JSR     $CC54
+00670  0658  20 58 CC   LCC54      JSR     $CC58
+00671  065B  AA                    TAX
+00672  065C             
+00673  065C  20 A5 FF   LCC58      JSR     $FFA5
+00674  065F             
+00675  065F  24 90                 BIT     $90
+00676  0661  70 07                 BVS     LCC66
+00677  0663             
+00678  0663  24 91                 BIT     $91
+00679  0665  30 9F                 BMI     LCRTS
+00680  0667             
+00681  0667  20 D7 AA   LCC63      JSR     $AAD7
+00682  066A             
+00683  066A  20 AB FF   LCC66      JSR     $FFAB
+00684  066D  20 42 F6              JSR     $F642
+00685  0670             
+00686  0670  4C 8C CC              JMP     $CC8C
+00687  0673             
+00688  0673                        ;       READ ERROR CHANNEL
+00689  0673             
+00690  0673  20 D7 AA   LCC6F      JSR     $AAD7
+00691  0676  20 3F AB              JSR     $AB3F
+00692  0679  A5 BA                 LDA     $BA
+00693  067B  20 B4 FF              JSR     $FFB4
+00694  067E  A9 6F                 LDA     #$6F
+00695  0680  20 96 FF              JSR     $FF96
+00696  0683             
+00697  0683  20 A5 FF   LCC7F      JSR     $FFA5
+00698  0686  20 D2 FF              JSR     $FFD2
+00699  0689  C9 0D                 CMP     #$0D
+00700  068B  D0 F6                 BNE     LCC7F
+00701  068D             
+00702  068D  20 AB FF              JSR     $FFAB
+00703  0690             
+00704  0690  A9 00      LCC8C      LDA     #$00
+00705  0692  A2 FB                 LDX     #$FB
+00706  0694  85 90                 STA     $90
+00707  0696  85 C6                 STA     $C6
+00708  0698  9A                    TXS
+00709  0699             
+00710  0699  4C A7 02              JMP     $02A7
+00711  069C             
+00712  069C                        ;       (*+1 = $CC99)
+00713  069C             
+00714  069C  A9         LCC98      BYTE    $A9
+00715  069D             
+00716  069D                        ;       CONTROL DATA POINTER ($CB00-$CFCF AND $FB00-$FFCF SWAPPED!)
+00717  069D             
+00718  069D  24 AE      LCC99      BIT     $AE
+00719  069F  90 02                 BCC     LCC9F
+00720  06A1  30 04                 BMI     LCCA3
+00721  06A3  09 30      LCC9F      ORA     #$30
+00722  06A5  85 AF                 STA     $AF
+00723  06A7  60         LCCA3      RTS
+00724  06A8             
+00725  06A8                        ;       TRANSFER ROUTINE
+00726  06A8             
+00727  06A8  A0 00      LCCA4      LDY     #$00
+00728  06AA             
+00729  06AA  C8         LCCA6      INY
+00730  06AB  D0 FD                 BNE     LCCA6
+00731  06AD             
+00732  06AD  A6 AC                 LDX     $AC
+00733  06AF             
+00734  06AF  2C 00 DD   LCCAB      BIT     $DD00
+00735  06B2  30 FB                 BMI     LCCAB
+00736  06B4             
+00737  06B4  8E 00 DD              STX     $DD00
+00738  06B7             
+00739  06B7                        ;       RASTER SYNCHRONIZATION (BADLINE CHECK):
+00740  06B7             
+00741  06B7                        ;       REMOVING THESE FOUR LINES MAKES THE OVERALL LOADING ON PAL
+00742  06B7                        ;       SYSTEMS ROUGHLY ABOUT 10% FASTER (WITH SCREEN DISABLED ALL THE
+00743  06B7                        ;       TIME), HOWEVER, THE TIMING BECOMES UNSTABLE ON NTSC ONES.
+00744  06B7             
+00745  06B7  AD 12 D0   LCCB3      LDA     $D012
+00746  06BA  49 02                 EOR     #$02
+00747  06BC  29 06                 AND     #$06
+00748  06BE  F0 F7                 BEQ     LCCB3
+00749  06C0             
+00750  06C0  A5 AD      LCCBC      LDA     $AD
+00751  06C2  8D 00 DD              STA     $DD00
+00752  06C5  48                    PHA
+00753  06C6  68                    PLA
+00754  06C7  48                    PHA
+00755  06C8  68                    PLA
+00756  06C9  EA                    NOP
+00757  06CA  AD 00 DD              LDA     $DD00
+00758  06CD  4A                    LSR
+00759  06CE  4A                    LSR
+00760  06CF  EA                    NOP
+00761  06D0  0D 00 DD              ORA     $DD00
+00762  06D3  29 F0                 AND     #$F0
+00763  06D5  8D E5 CC              STA     $CCE5
+00764  06D8  AD 00 DD              LDA     $DD00
+00765  06DB  4A                    LSR
+00766  06DC  4A                    LSR
+00767  06DD  EA                    NOP
+00768  06DE  0D 00 DD              ORA     $DD00
+00769  06E1  8E 00 DD              STX     $DD00
+00770  06E4  4A                    LSR
+00771  06E5  4A                    LSR
+00772  06E6  4A                    LSR
+00773  06E7  4A                    LSR
+00774  06E8  09 F0      LCCE4      ORA     #$F0
+00775  06EA  99 00 CB              STA     $CB00,Y
+00776  06ED  C8                    INY
+00777  06EE  D0 C7                 BNE     LCCB3
+00778  06F0             
+00779  06F0  A5 AD                 LDA     $AD
+00780  06F2  8D 00 DD              STA     $DD00
+00781  06F5             
+00782  06F5  60                    RTS
+00783  06F6             
+00784  06F6                        ;       START ADDRESS
+00785  06F6             
+00786  06F6  AD 02 CB   LCCF2      LDA     $CB02
+00787  06F9  AC 03 CB              LDY     $CB03
+00788  06FC             
+00789  06FC  A6 AB                 LDX     $AB
+00790  06FE  D0 04                 BNE     LCD00
+00791  0700             
+00792  0700  A5 C3      LCCFC      LDA     $C3
+00793  0702  A4 C4                 LDY     $C4
+00794  0704             
+00795  0704  85 AE      LCD00      STA     $AE
+00796  0706  84 AF                 STY     $AF
+00797  0708             
+00798  0708  60                    RTS
+00799  0709             
+00800  0709                        ;       LOAD/VERIFY
+00801  0709             
+00802  0709  85 93      LCD05      STA     $93
+00803  070B             
+00804  070B  A5 BA                 LDA     $BA
+00805  070D  C9 08                 CMP     #$08
+00806  070F  F0 08                 BEQ     LCD15
+00807  0711  C9 02                 CMP     #$02
+00808  0713  B0 08                 BCS     LCD19
+00809  0715  25 B9                 AND     $B9
+00810  0717  85 B9                 STA     $B9
+00811  0719             
+00812  0719                        ;       LAST ACCESSED DEVICE
+00813  0719             
+00814  0719  A5 A8      LCD15      LDA     $A8
+00815  071B  85 BA                 STA     $BA
+00816  071D             
+00817  071D  A0 00      LCD19      LDY     #$00
+00818  071F  8C 15 D0              STY     $D015
+00819  0722  85 A8                 STA     $A8
+00820  0724             
+00821  0724                        ;       (CHECKING IF "$" AND/OR LOAD/VERIFY WITH OR WITHOUT FILENAME)
+00822  0724             
+00823  0724  B1 BB                 LDA     ($BB),Y
+00824  0726             
+00825  0726  C9 24                 CMP     #$24
+00826  0728  D0 0C                 BNE     LCD32
+00827  072A             
+00828  072A  A5 93                 LDA     $93
+00829  072C  D0 05                 BNE     LCD2F
+00830  072E  85 B9                 STA     $B9
+00831  0730             
+00832  0730  6C 73 CF              JMP     ($CF73)
+00833  0733             
+00834  0733  4C 03 CC   LCD2F      JMP     $CC03
+00835  0736             
+00836  0736  A6 93      LCD32      LDX     $93
+00837  0738  F0 0A                 BEQ     LCD40
+00838  073A             
+00839  073A  A6 B7                 LDX     $B7
+00840  073C  D0 03                 BNE     LCD3D
+00841  073E             
+00842  073E  4C 6F CC              JMP     $CC6F
+00843  0741             
+00844  0741  4C 46 CE   LCD3D      JMP     $CE46
+00845  0744             
+00846  0744  A6 B7      LCD40      LDX     $B7
+00847  0746  D0 03                 BNE     LCD47
+00848  0748             
+00849  0748  20 B3 CE              JSR     $CEB3
+00850  074B             
+00851  074B  20 C0 CE   LCD47      JSR     $CEC0
+00852  074E             
+00853  074E                        ;       RASTER SYNCHRONIZATION (HAVING THE SCREEN TURNED OFF)
+00854  074E             
+00855  074E  2C 11 D0   LCD4A      BIT     $D011
+00856  0751  10 FB                 BPL     LCD4A
+00857  0753             
+00858  0753                        ;       (*+1 = $CD50)
+00859  0753             
+00860  0753  20 86 CE   CRCK1      JSR     $CE86
+00861  0756  20 8D CE              JSR     $CE8D
+00862  0759             
+00863  0759  20 A5 FF              JSR     $FFA5
+00864  075C             
+00865  075C  A5 90                 LDA     $90
+00866  075E  4A                    LSR
+00867  075F  4A                    LSR
+00868  0760  90 06                 BCC     LCD64
+00869  0762             
+00870  0762                        ;       FILE NOT FOUND ERROR
+00871  0762             
+00872  0762  20 1F CE              JSR     $CE1F
+00873  0765  4C 04 F7              JMP     $F704
+00874  0768             
+00875  0768                        ;       LOAD MESSAGE
+00876  0768             
+00877  0768  20 D2 F5   LCD64      JSR     $F5D2
+00878  076B             
+00879  076B  A0 00                 LDY     #$00
+00880  076D             
+00881  076D                        ;       SENDING DRIVE CODE TO THE DRIVE
+00882  076D             
+00883  076D  20 5D CE   LCD69      JSR     $CE5D
+00884  0770  A9 57                 LDA     #$57
+00885  0772  20 A8 FF              JSR     $FFA8
+00886  0775  98                    TYA
+00887  0776  20 A8 FF              JSR     $FFA8
+00888  0779  A9 06                 LDA     #$06
+00889  077B  20 A8 FF              JSR     $FFA8
+00890  077E  A9 1E                 LDA     #$1E
+00891  0780  20 A8 FF              JSR     $FFA8
+00892  0783  A2 1E                 LDX     #$1E
+00893  0785             
+00894  0785  B9 D8 CE   LCD81      LDA     $CED8,Y
+00895  0788  20 A8 FF              JSR     $FFA8
+00896  078B  C8                    INY
+00897  078C  CA                    DEX
+00898  078D  D0 F6                 BNE     LCD81
+00899  078F             
+00900  078F  20 AE FF              JSR     $FFAE
+00901  0792  C0 9A                 CPY     #$9A
+00902  0794  90 D7                 BCC     LCD69
+00903  0796             
+00904  0796  20 5D CE              JSR     $CE5D
+00905  0799  A9 45                 LDA     #$45
+00906  079B  20 A8 FF              JSR     $FFA8
+00907  079E  A9 00                 LDA     #$00
+00908  07A0  20 A8 FF              JSR     $FFA8
+00909  07A3  A9 06                 LDA     #$06
+00910  07A5  20 A8 FF              JSR     $FFA8
+00911  07A8  20 AE FF              JSR     $FFAE
+00912  07AB             
+00913  07AB                        ;       START LOADING
+00914  07AB             
+00915  07AB  78                    SEI
+00916  07AC  AD 00 DD              LDA     $DD00
+00917  07AF  29 03                 AND     #$03
+00918  07B1  09 04                 ORA     #$04
+00919  07B3  85 AD                 STA     $AD
+00920  07B5  09 10                 ORA     #$10
+00921  07B7  85 AC                 STA     $AC
+00922  07B9             
+00923  07B9  20 A4 CC              JSR     $CCA4
+00924  07BC  20 F2 CC              JSR     $CCF2
+00925  07BF             
+00926  07BF  A2 04                 LDX     #$04
+00927  07C1  D0 05                 BNE     LCDC4
+00928  07C3             
+00929  07C3  20 A4 CC   LCDBF      JSR     $CCA4
+00930  07C6             
+00931  07C6  A2 02                 LDX     #$02
+00932  07C8             
+00933  07C8  A9 01      LCDC4      LDA     #$01
+00934  07CA  8D 30 D0              STA     $D030
+00935  07CD             
+00936  07CD  20 37 CE              JSR     $CE37
+00937  07D0             
+00938  07D0  A0 00                 LDY     #$00
+00939  07D2             
+00940  07D2  AD 00 CB              LDA     $CB00
+00941  07D5  F0 10                 BEQ     LCDE3
+00942  07D7             
+00943  07D7  38                    SEC
+00944  07D8  30 1E                 BMI     LCDF4
+00945  07DA             
+00946  07DA  BD 00 CB   LCDD6      LDA     $CB00,X
+00947  07DD  91 AE                 STA     ($AE),Y
+00948  07DF  20 31 CE              JSR     $CE31
+00949  07E2  E8                    INX
+00950  07E3  D0 F5                 BNE     LCDD6
+00951  07E5             
+00952  07E5  F0 10                 BEQ     LCDF3
+00953  07E7             
+00954  07E7  CA         LCDE3      DEX
+00955  07E8             
+00956  07E8  BD 01 CB   LCDE4      LDA     $CB01,X
+00957  07EB  91 AE                 STA     ($AE),Y
+00958  07ED  20 31 CE              JSR     $CE31
+00959  07F0  E8                    INX
+00960  07F1  EC 01 CB              CPX     $CB01
+00961  07F4  90 F2                 BCC     LCDE4
+00962  07F6             
+00963  07F6  8A                    TXA
+00964  07F7             
+00965  07F7  18         LCDF3      CLC
+00966  07F8             
+00967  07F8  08         LCDF4      PHP
+00968  07F9             
+00969  07F9                        ;       CONTROL DATA POINTER ($CB00-$CFCF AND $FB00-$FFCF SWAPPED!)
+00970  07F9             
+00971  07F9  A5 AF                 LDA     $AF
+00972  07FB             
+00973  07FB  C9 FB                 CMP     #$FB
+00974  07FD  90 04                 BCC     LCDFF
+00975  07FF             
+00976  07FF  29 CF                 AND     #$CF
+00977  0801  85 AF                 STA     $AF
+00978  0803             
+00979  0803  28         LCDFF      PLP
+00980  0804  8C 30 D0              STY     $D030
+00981  0807  F0 BA                 BEQ     LCDBF
+00982  0809             
+00983  0809  08                    PHP
+00984  080A  A5 AC                 LDA     $AC
+00985  080C  09 CC                 ORA     #$CC
+00986  080E  8D 00 DD              STA     $DD00
+00987  0811  20 97 CE              JSR     $CE97
+00988  0814  A9 49                 LDA     #$49
+00989  0816  20 A8 FF              JSR     $FFA8
+00990  0819  20 A8 FF              JSR     $FFA8
+00991  081C  28                    PLP
+00992  081D             
+00993  081D                        ;       RETURN FROM THE LOAD ROUTINE (THROUGH KERNAL)
+00994  081D             
+00995  081D  20 1F CE              JSR     $CE1F
+00996  0820  4C AA F5              JMP     $F5AA
+00997  0823             
+00998  0823                        ;       RESTORE SCREEN + IRQ (BEFORE KERNAL CALL)
+00999  0823             
+01000  0823  48         LCE1F      PHA
+01001  0824             
+01002  0824                        ;       (*+1 = $CE21)
+01003  0824             
+01004  0824  A9 30                 LDA     #$30
+01005  0826  29 34                 AND     #$34
+01006  0828  69 00                 ADC     #$00
+01007  082A  48                    PHA
+01008  082B             
+01009  082B                        ;       (*+1 = $CE28)
+01010  082B             
+01011  082B  A9 1B                 LDA     #$1B
+01012  082D  29 7B                 AND     #$7B
+01013  082F  8D 11 D0              STA     $D011
+01014  0832  28                    PLP
+01015  0833  68                    PLA
+01016  0834             
+01017  0834  60         LCE30      RTS
+01018  0835             
+01019  0835                        ;       INCREMENT DATA POINTER
+01020  0835             
+01021  0835  E6 AE      LCE31      INC     $AE
+01022  0837  D0 02                 BNE     LCE37
+01023  0839             
+01024  0839  E6 AF                 INC     $AF
+01025  083B             
+01026  083B                        ;       CONTROL DATA POINTER ($CB00-$CFCF AND $FB00-$FFCF SWAPPED!)
+01027  083B             
+01028  083B  A5 AF      LCE37      LDA     $AF
+01029  083D             
+01030  083D  C9 CB                 CMP     #$CB
+01031  083F  90 F3                 BCC     LCE30
+01032  0841  C9 CF                 CMP     #$CF
+01033  0843  B0 EF                 BCS     LCE30
+01034  0845             
+01035  0845  C9 CE                 CMP     #$CE
+01036  0847  4C 99 CC              JMP     $CC99
+01037  084A             
+01038  084A  C9 40      LCE46      CMP     #$40
+01039  084C  90 0D                 BCC     LCE57
+01040  084E             
+01041  084E                        ;       SEND DRIVE COMMAND
+01042  084E             
+01043  084E  20 97 CE   LCE4A      JSR     $CE97
+01044  0851             
+01045  0851  B1 BB      LCE4D      LDA     ($BB),Y
+01046  0853  20 A8 FF              JSR     $FFA8
+01047  0856  C8                    INY
+01048  0857  C4 B7                 CPY     $B7
+01049  0859  90 F6                 BCC     LCE4D
+01050  085B             
+01051  085B  20 AE FF   LCE57      JSR     $FFAE
+01052  085E  4C 8C CC              JMP     $CC8C
+01053  0861             
+01054  0861  20 97 CE   LCE5D      JSR     $CE97
+01055  0864  A9 4D                 LDA     #$4D
+01056  0866  20 A8 FF              JSR     $FFA8
+01057  0869  A9 2D                 LDA     #$2D
+01058  086B  4C A8 FF              JMP     $FFA8
+01059  086E             
+01060  086E                        ;       DISPLAY MESSAGE, INSTALL LOAD VECTOR, EXIT
+01061  086E             
+01062  086E  78         LCE6A      SEI
+01063  086F             
+01064  086F  A9 E3      LCE6B      LDA     #<$02E3
+01065  0871  A0 02                 LDY     #>$02E3
+01066  0873  8D 30 03              STA     $0330
+01067  0876  8C 31 03              STY     $0331
+01068  0879             
+01069  0879  A2 00      LCE75      LDX     #$00
+01070  087B  A9 A1      LCE77      LDA     #<$CEA1
+01071  087D  A0 CE      LCE79      LDY     #>$CEA1
+01072  087F  8E 20 D0              STX     $D020
+01073  0882  8E 21 D0              STX     $D021
+01074  0885  86 C6                 STX     $C6
+01075  0887  4C 1E AB              JMP     $AB1E
+01076  088A             
+01077  088A  A9 60      LCE86      LDA     #$60
+01078  088C  85 B9                 STA     $B9
+01079  088E  20 D5 F3              JSR     $F3D5
+01080  0891             
+01081  0891  A5 BA      LCE8D      LDA     $BA
+01082  0893  20 B4 FF              JSR     $FFB4
+01083  0896  A5 B9                 LDA     $B9
+01084  0898  4C 96 FF              JMP     $FF96
+01085  089B             
+01086  089B  A5 BA      LCE97      LDA     $BA
+01087  089D  20 B1 FF              JSR     $FFB1
+01088  08A0  A9 6F                 LDA     #$6F
+01089  08A2  4C 93 FF              JMP     $FF93
+01090  08A5             
+01091  08A5                        ;       "SDOS V1.1"
+01092  08A5             
+01093  08A5  99 93 0E   LCEA1      BYTE    $99,$93,$0E,$53,$44,$4F,$53,$20,$56,$31,$2E,$31,$0D,$00
+01094  08B3             
+01095  08B3  00                    BYTE    $00
+01096  08B4             
+01097  08B4                        ;       "?*" (FILENAME AT $CEB0)
+01098  08B4             
+01099  08B4  3F 2A 00   LCEB0      BYTE    $3F,$2A,$00
+01100  08B7             
+01101  08B7  A9 02      LCEB3      LDA     #$02
+01102  08B9  A2 B0                 LDX     #$B0
+01103  08BB  A0 CE                 LDY     #$CE
+01104  08BD  85 B7                 STA     $B7
+01105  08BF  86 BB                 STX     $BB
+01106  08C1  84 BC                 STY     $BC
+01107  08C3  60                    RTS
+01108  08C4             
+01109  08C4                        ;       TURN OFF SCREEN + IRQ (BEFORE VDOS CALL)
+01110  08C4             
+01111  08C4  08         LCEC0      PHP
+01112  08C5  78                    SEI
+01113  08C6  68                    PLA
+01114  08C7  A0 0B                 LDY     #$0B
+01115  08C9  8D 21 CE              STA     $CE21
+01116  08CC  AD 11 D0              LDA     $D011
+01117  08CF  8C 11 D0              STY     $D011
+01118  08D2  8D 28 CE              STA     $CE28
+01119  08D5             
+01120  08D5                        ;       "SEARCHING FOR..."
+01121  08D5             
+01122  08D5  A6 B9                 LDX     $B9
+01123  08D7  86 AB                 STX     $AB
+01124  08D9             
+01125  08D9                        ;       (* = $CED5)
+01126  08D9             
+01127  08D9  4C AF F5   CRCK2      JMP     $F5AF
+01128  08DC             
+01129  08DC                        ;       (* = $CED8) DRIVE CODE (IN DRIVE AT $0600)
+01130  08DC             
+01131  08DC  A0 00                 LDY     #$00
+01132  08DE             
+01133  08DE  98         L73A       TYA
+01134  08DF  29 0F                 AND     #$0F
+01135  08E1  AA                    TAX
+01136  08E2  BD 8A 06              LDA     $068A,X
+01137  08E5  99 00 04              STA     $0400,Y
+01138  08E8  98                    TYA
+01139  08E9  4A                    LSR
+01140  08EA  4A                    LSR
+01141  08EB  4A                    LSR
+01142  08EC  4A                    LSR
+01143  08ED  AA                    TAX
+01144  08EE  BD 8A 06              LDA     $068A,X
+01145  08F1  99 00 05              STA     $0500,Y
+01146  08F4  C8                    INY
+01147  08F5  D0 E7                 BNE     L73A
+01148  08F7             
+01149  08F7  A5 18      L753       LDA     $18
+01150  08F9  85 06                 STA     $06
+01151  08FB  A5 19                 LDA     $19
+01152  08FD  85 07                 STA     $07
+01153  08FF             
+01154  08FF  A9 B0      L75B       LDA     #$B0
+01155  0901  85 00                 STA     $00
+01156  0903             
+01157  0903  A5 00      L75F       LDA     $00
+01158  0905  30 FC                 BMI     L75F
+01159  0907             
+01160  0907  A9 80      L763       LDA     #$80
+01161  0909  85 00                 STA     $00
+01162  090B             
+01163  090B  A5 00      L767       LDA     $00
+01164  090D  30 FC                 BMI     L767
+01165  090F             
+01166  090F  78         L76B       SEI
+01167  0910  C9 01                 CMP     #$01
+01168  0912  F0 05                 BEQ     L775
+01169  0914             
+01170  0914  A9 FF      L770       LDA     #$FF
+01171  0916  8D 00 03              STA     $0300
+01172  0919             
+01173  0919  A9 02      L775       LDA     #$02
+01174  091B  8D 00 18              STA     $1800
+01175  091E  0A                    ASL
+01176  091F             
+01177  091F  2C 00 18   L77B       BIT     $1800
+01178  0922  F0 FB                 BEQ     L77B
+01179  0924             
+01180  0924  BE 00 03   L780       LDX     $0300,Y
+01181  0927             
+01182  0927  2C 00 18   L783       BIT     $1800
+01183  092A  D0 FB                 BNE     L783
+01184  092C             
+01185  092C  BD 00 05   L788       LDA     $0500,X
+01186  092F  8D 00 18              STA     $1800
+01187  0932  0A                    ASL
+01188  0933  29 0F                 AND     #$0F
+01189  0935  EA                    NOP
+01190  0936  8D 00 18              STA     $1800
+01191  0939  BD 00 04              LDA     $0400,X
+01192  093C  EA                    NOP
+01193  093D  8D 00 18              STA     $1800
+01194  0940  0A                    ASL
+01195  0941  29 0F                 AND     #$0F
+01196  0943  EA                    NOP
+01197  0944  8D 00 18              STA     $1800
+01198  0947  A9 04                 LDA     #$04
+01199  0949  C8                    INY
+01200  094A  EA                    NOP
+01201  094B  8D 00 18              STA     $1800
+01202  094E  D0 D4                 BNE     L780
+01203  0950             
+01204  0950  58         L7AC       CLI
+01205  0951  AD 01 03              LDA     $0301
+01206  0954  85 07                 STA     $07
+01207  0956  AD 00 03              LDA     $0300
+01208  0959  F0 0A                 BEQ     L7C1
+01209  095B             
+01210  095B  30 08      L7B7       BMI     L7C1
+01211  095D             
+01212  095D  C5 06      L7B9       CMP     $06
+01213  095F  85 06                 STA     $06
+01214  0961  F0 A4                 BEQ     L763
+01215  0963             
+01216  0963  D0 9A      L7BF       BNE     L75B
+01217  0965             
+01218  0965  60         L7C1       RTS
+01219  0966             
+01220  0966  0F 07 0D              BYTE    $0F,$07,$0D,$05,$0B,$03,$09,$01,$0E,$06,$0C,$04,$0A,$02,$08,$00
+01221  0976             
+01222  0976                        ;       (* = $CF72)
+01223  0976             
+01224  0976  60         CRACK      BYTE    $60
+01225  0977  A5 F4                 WORD    $F4A5
+01226  0979  4C 1F CE              JMP     $CE1F
+01227  097C             
+01228  097C                        ;       (* = $CF78)
+01229  097C             
+01230  097C  98 CC                 WORD    $CC98
+01231  097E  20 9F CC              JSR     $CC9F
+01232  0981             
+01233  0981                        ;       (* = $0981) <- (* = $CF7D)
+01234  0981             
+01235  0981                        ;       ----------------------------------------
+01236  0981                        ;       SJLOAD/VDOS HELPER ($FF7D-$FFCF)
+01237  0981                        ;       ----------------------------------------
+01238  0981             
+01239  0981                        ;       (* = $CF7D) SELF-MODIFICATION (FROM VDOS TO SJLOAD)
+01240  0981             
+01241  0981  A0 04                 LDY     #$04
+01242  0983  B9 78 CF   VLP1       LDA     $CF78,Y
+01243  0986  99 04 CC              STA     $CC04,Y
+01244  0989  88                    DEY
+01245  098A  10 F7                 BPL     VLP1
+01246  098C             
+01247  098C  A0 22                 LDY     #$22
+01248  098E  B9 1F CE   VLP2       LDA     $CE1F,Y
+01249  0991  99 07 CF              STA     $CF07,Y
+01250  0994  B9 6A CE              LDA     $CE6A,Y
+01251  0997  99 2A CF              STA     $CF2A,Y
+01252  099A  B9 A1 CE              LDA     $CEA1,Y
+01253  099D  99 4D CF              STA     $CF4D,Y
+01254  09A0  88                    DEY
+01255  09A1  10 EB                 BPL     VLP2
+01256  09A3             
+01257  09A3  A0 CF                 LDY     #$CF
+01258  09A5  B9 95 C9   VLP3       LDA     $C996-1,Y
+01259  09A8  99 98 CC              STA     $CC99-1,Y
+01260  09AB  B9 64 CA              LDA     $CA65-1,Y
+01261  09AE  99 67 CD              STA     $CD68-1,Y
+01262  09B1  B9 33 CB              LDA     $CB34-1,Y
+01263  09B4  99 36 CE              STA     $CE37-1,Y
+01264  09B7  88                    DEY
+01265  09B8  D0 EB                 BNE     VLP3
+01266  09BA             
+01267  09BA  A2 2B                 LDX     #$2B
+01268  09BC  A9 CF                 LDA     #$CF
+01269  09BE  A0 4D                 LDY     #$4D
+01270  09C0  8E D2 02              STX     $02D2
+01271  09C3  8D D3 02              STA     $02D3
+01272  09C6  8C 38 CF              STY     $CF38
+01273  09C9  8D 3A CF              STA     $CF3A
+01274  09CC             
+01275  09CC                        ;       (* = $CFC8)
+01276  09CC             
+01277  09CC  EE D3 CF              INC     $CFD3
+01278  09CF  EE D9 CF              INC     $CFD9
+01279  09D2             
+01280  09D2                        ;       (* = $CFCE)
+01281  09D2             
+01282  09D2  60                    RTS
+01283  09D3             
+01284  09D3                        ;       (* = $CFCF) <- (* = $FFCF)
+01285  09D3             
+01286  09D3  40                    RTI
+01287  09D4             
+01288  09D4                        ;       (* = $09D4) <- (* = $CFD0)
+01289  09D4             
+01290  09D4                        ;       ----------------------------------------
+01291  09D4                        ;       SJLOAD/VDOS HELPER ($FFD0-$FFF9)
+01292  09D4                        ;       ----------------------------------------
+01293  09D4             
+01294  09D4                        ;       (* = $FFD0) SWAPPING $CC00 AND $FC00 (OR $CB00 AND $FB00)
+01295  09D4             
+01296  09D4  A0 00      SWP        LDY     #$00
+01297  09D6             
+01298  09D6  A9 CB      SWC        LDA     #$CB
+01299  09D8  84 0C                 STY     $0C
+01300  09DA  85 0D                 STA     $0D
+01301  09DC             
+01302  09DC  A9 FB      SWD        LDA     #$FB
+01303  09DE  84 0E                 STY     $0E
+01304  09E0  85 0F                 STA     $0F
+01305  09E2             
+01306  09E2  B1 0C      SWY        LDA     ($0C),Y
+01307  09E4  48                    PHA
+01308  09E5  B1 0E                 LDA     ($0E),Y
+01309  09E7  91 0C                 STA     ($0C),Y
+01310  09E9  68                    PLA
+01311  09EA  91 0E                 STA     ($0E),Y
+01312  09EC             
+01313  09EC  C8                    INY
+01314  09ED  D0 04                 BNE     SWYNC
+01315  09EF             
+01316  09EF  E6 0D                 INC     $0D
+01317  09F1  E6 0F                 INC     $0F
+01318  09F3             
+01319  09F3  C0 CF      SWYNC      CPY     #$CF
+01320  09F5  D0 EB                 BNE     SWY
+01321  09F7             
+01322  09F7  A5 0D                 LDA     $0D
+01323  09F9  E9 CF      SWYND      SBC     #$CF
+01324  09FB  90 E5                 BCC     SWY
+01325  09FD             
+01326  09FD  60                    RTS
+01327  09FE             
+01328  09FE                        ;       (* = $FFFA) <- (* = $CFFA)
+01329  09FE             
+01330  09FE  CF FF                 WORD    $FFCF
+01331  0A00  CF FF                 WORD    $FFCF
+01332  0A02  CF FF                 WORD    $FFCF
+01333  0A04             
+01334  0A04                        ;       (* = $0A04) <- (* = $D000)
+01335  0A04             
+01336  0A04                        ;       ----------------------------------------
+01337  0A04                        ;       SJLOAD/VDOS HELPER ($02A7-$02FF)
+01338  0A04                        ;       ----------------------------------------
+01339  0A04             
+01340  0A04                        ;       (JUMP TO BASIC AFTER VERIFY)
+01341  0A04             
+01342  0A04  20 EB 02   S02A7      JSR     $02EB
+01343  0A07  4C 74 A4              JMP     $A474
+01344  0A0A             
+01345  0A0A                        ;       (SWAPPING FORTH)
+01346  0A0A             
+01347  0A0A  20 EB 02   S02AD      JSR     $02EB
+01348  0A0D  08                    PHP
+01349  0A0E  48                    PHA
+01350  0A0F  98                    TYA
+01351  0A10  48                    PHA
+01352  0A11  A0 59                 LDY     #$59
+01353  0A13  CC 72 CF              CPY     $CF72
+01354  0A16  F0 07                 BEQ     S02C2
+01355  0A18             
+01356  0A18  24                    BYTE    $24
+01357  0A19             
+01358  0A19                        ;       SYS700 (JSR $02BC): UN-INSTALL (BY RESTORING KERNAL)
+01359  0A19             
+01360  0A19  4C 15 FD   S02BC      JMP     $FD15
+01361  0A1C             
+01362  0A1C  20 EB 02              JSR     $02EB
+01363  0A1F             
+01364  0A1F                        ;       IT WORKS AROUND A KERNAL BUG: FUNCTION $FF8A ($FD15) DESTROYS
+01365  0A1F                        ;       32 BYTES AT $FD30-$FD4F THAT NEED TO BE RESTORED:
+01366  0A1F             
+01367  0A1F  B9 75 CF   S02C2      LDA     $CF75,Y
+01368  0A22  99 00 CD              STA     $CD00,Y
+01369  0A25  88                    DEY
+01370  0A26  10 F7                 BPL     S02C2
+01371  0A28  30 2E                 BMI     S02FB
+01372  0A2A             
+01373  0A2A                        ;       SYS717 <- SYS737 (RE-INSTALL)
+01374  0A2A             
+01375  0A2A  18         S02CD      CLC
+01376  0A2B  20 AD 02   S02CE      JSR     $02AD
+01377  0A2E             
+01378  0A2E  20 6B CE   S02D1      JSR     $CE6B
+01379  0A31  18                    CLC
+01380  0A32  90 14                 BCC     S02EB
+01381  0A34             
+01382  0A34                        ;       SYS727 (JSR $02D7): RE-INSTALL WITH SWAPPING DISABLED
+01383  0A34                        ;       (SPEED LOADER CODE WILL STAY FOR EVER FIXED AT $CC00)
+01384  0A34             
+01385  0A34  20 AD 02   S02D7      JSR     $02AD
+01386  0A37             
+01387  0A37  A9 60      S02DA      LDA     #$60
+01388  0A39  8D EB 02              STA     $02EB
+01389  0A3C  D0 F0                 BNE     S02D1
+01390  0A3E             
+01391  0A3E                        ;       SYS737 (JSR $02E1): RE-INSTALL
+01392  0A3E             
+01393  0A3E  18         S02E1      CLC
+01394  0A3F  90 EA                 BCC     S02CE
+01395  0A41             
+01396  0A41                        ;       (ANOTHER NOP AT $02E3 HIDDEN IN THE OPERAND!)
+01397  0A41             
+01398  0A41  EA         S02E4      NOP
+01399  0A42             
+01400  0A42  20 AD 02   S02E5      JSR     $02AD
+01401  0A45             
+01402  0A45  20 05 CD   S02E8      JSR     $CD05
+01403  0A48             
+01404  0A48                        ;       (SWAPPING BACK)
+01405  0A48             
+01406  0A48  08         S02EB      PHP
+01407  0A49  78                    SEI
+01408  0A4A  48                    PHA
+01409  0A4B  98                    TYA
+01410  0A4C  48                    PHA
+01411  0A4D  A9 35                 LDA     #$35
+01412  0A4F  85 01                 STA     $01
+01413  0A51  20 D0 FF              JSR     $FFD0
+01414  0A54  A9 37                 LDA     #$37
+01415  0A56  85 01                 STA     $01
+01416  0A58  68         S02FB      PLA
+01417  0A59  A8                    TAY
+01418  0A5A  68                    PLA
+01419  0A5B  28                    PLP
+01420  0A5C  60                    RTS
+01421  0A5D             
+01422  0A5D                        ;       (* = $0A5D)
+01423  0A5D             
+01424  0A5D                        ;       ----------------------------------------
+01425  0A5D                        ;       SETUP SUBROUTINES
+01426  0A5D                        ;       ----------------------------------------
+01427  0A5D             
+01428  0A5D                        ;       CHECKING FOR MODIFIED LOAD VECTOR
+01429  0A5D             
+01430  0A5D  AC 30 03   CHECK1     LDY     $0330
+01431  0A60  AD 31 03              LDA     $0331
+01432  0A63  8C 77 09              STY     CRACK+1
+01433  0A66  8D 78 09              STA     CRACK+2
+01434  0A69             
+01435  0A69                        ;       STOCK, JIFFY AND DTV KERNALS ($F4A5 OR $F730) ARE ACCEPTED
+01436  0A69             
+01437  0A69  C0 A5                 CPY     #$A5
+01438  0A6B  D0 04                 BNE     DTV
+01439  0A6D  E9 F4                 SBC     #$F4
+01440  0A6F  F0 06                 BEQ     CROCK
+01441  0A71             
+01442  0A71  C0 30      DTV        CPY     #$30
+01443  0A73  D0 02                 BNE     CROCK
+01444  0A75  E9 F7                 SBC     #$F7
+01445  0A77  18         CROCK      CLC
+01446  0A78  D0 16                 BNE     ROCK
+01447  0A7A             
+01448  0A7A                        ;       CPU CHECK ($1A = INC A ON 4510 OR 65816, BUT NOP ON 6510 CPU)
+01449  0A7A             
+01450  0A7A  1A                    BYTE    $1A
+01451  0A7B  F0 0D                 BEQ     CHOCK
+01452  0A7D             
+01453  0A7D                        ;       CPU CHECK ($EB = NOP ON 65C02, XBA ON 65816, ROW $XXXX ON 4510)
+01454  0A7D             
+01455  0A7D  EB                    BYTE    $EB
+01456  0A7E  A9 00                 LDA     #$00
+01457  0A80             
+01458  0A80                        ;       4510 (C65) FOUND -> KERNAL LOAD
+01459  0A80             
+01460  0A80  A8                    TAY
+01461  0A81  D0 F4                 BNE     CROCK
+01462  0A83             
+01463  0A83  EB                    BYTE    $EB
+01464  0A84             
+01465  0A84                        ;       65C02 FOUND -> KERNAL LOAD
+01466  0A84             
+01467  0A84  A8                    TAY
+01468  0A85  F0 09                 BEQ     ROCK
+01469  0A87             
+01470  0A87                        ;       65816 (SUPERCPU) FOUND -> TURBO OFF (REQUIRED FOR TIMING)
+01471  0A87             
+01472  0A87  8D 7A D0              STA     $D07A
+01473  0A8A             
+01474  0A8A                        ;       CHECKING FOR C= AND CTRL DEPRESSED
+01475  0A8A             
+01476  0A8A  84 FF      CHOCK      STY     $FF
+01477  0A8C             
+01478  0A8C  A6 BA      CHECK2     LDX     $BA
+01479  0A8E  E0 04                 CPX     #$04
+01480  0A90  AD 8D 02   ROCK       LDA     $028D
+01481  0A93  B0 02                 BCS     ORCK
+01482  0A95             
+01483  0A95  09 06                 ORA     #$06
+01484  0A97             
+01485  0A97  0D 7D 03   ORCK       ORA     ATP+1
+01486  0A9A  8D 7D 03              STA     ATP+1
+01487  0A9D             
+01488  0A9D  29 06                 AND     #$06
+01489  0A9F  C9 06                 CMP     #$06
+01490  0AA1  D0 65                 BNE     XEST
+01491  0AA3             
+01492  0AA3                        ;       SELF-MODIFICATION (REVERT TO KERNAL LOAD)
+01493  0AA3             
+01494  0AA3  68                    PLA
+01495  0AA4  68                    PLA
+01496  0AA5             
+01497  0AA5                        ;       SELF-MODIFICATION (FROM VDOS TO KERNAL)
+01498  0AA5             
+01499  0AA5  60         KERL       RTS
+01500  0AA6  C8 CF                 WORD    $CFC8
+01501  0AA8             
+01502  0AA8  A0 A5                 LDY     #$A5
+01503  0AAA  A9 93                 LDA     #$93
+01504  0AAC  8C D5 CE              STY     $CED5
+01505  0AAF  8D D6 CE              STA     $CED6
+01506  0AB2             
+01507  0AB2  A0 05                 LDY     #$05
+01508  0AB4  99 50 CD   KLP        STA     $CD50,Y
+01509  0AB7  B9 72 CF              LDA     $CF72,Y
+01510  0ABA  88                    DEY
+01511  0ABB  10 F7                 BPL     KLP
+01512  0ABD             
+01513  0ABD  8D D7 CE              STA     $CED7
+01514  0AC0             
+01515  0AC0  D0 6B                 BNE     SWAP
+01516  0AC2             
+01517  0AC2                        ;       DRIVE RESET AND INSTALLING HELPER
+01518  0AC2             
+01519  0AC2  20 8A FF   RESET      JSR     $FF8A
+01520  0AC5             
+01521  0AC5  78                    SEI
+01522  0AC6  A0 00                 LDY     #$00
+01523  0AC8  A9 80                 LDA     #$80
+01524  0ACA  84 90                 STY     $90
+01525  0ACC  85 9D                 STA     $9D
+01526  0ACE  84 B8                 STY     $B8
+01527  0AD0  84 B9                 STY     $B9
+01528  0AD2             
+01529  0AD2                        ;       CHECKING FOR * OR = IN FILENAME (TO LOAD ANOTHER FILE IF SO)
+01530  0AD2             
+01531  0AD2  C6 B7      SILP       DEC     $B7
+01532  0AD4  F0 12                 BEQ     LASC
+01533  0AD6             
+01534  0AD6  B1 BB                 LDA     ($BB),Y
+01535  0AD8             
+01536  0AD8  E6 BB                 INC     $BB
+01537  0ADA  D0 02                 BNE     SILC
+01538  0ADC             
+01539  0ADC  E6 BC                 INC     $BC
+01540  0ADE             
+01541  0ADE  C9 2A      SILC       CMP     #$2A
+01542  0AE0  F0 04                 BEQ     SASC
+01543  0AE2  C9 3D                 CMP     #$3D
+01544  0AE4  D0 EC                 BNE     SILP
+01545  0AE6             
+01546  0AE6  E6 B7      SASC       INC     $B7
+01547  0AE8             
+01548  0AE8                        ;       LAST ACCESSED DEVICE
+01549  0AE8             
+01550  0AE8  A5 BA      LASC       LDA     $BA
+01551  0AEA  D0 04                 BNE     HABA
+01552  0AEC             
+01553  0AEC  A9 08                 LDA     #$08
+01554  0AEE  85 BA                 STA     $BA
+01555  0AF0  85 A8      HABA       STA     $A8
+01556  0AF2             
+01557  0AF2  A2 58                 LDX     #$58
+01558  0AF4  B5 68      HLP        LDA     $68,X
+01559  0AF6  9D 80 0C              STA     $0C80,X
+01560  0AF9  BD 04 0A              LDA     S02A7,X
+01561  0AFC  9D A7 02              STA     $02A7,X
+01562  0AFF  CA                    DEX
+01563  0B00  10 F2                 BPL     HLP
+01564  0B02             
+01565  0B02  86 90                 STX     $90
+01566  0B04             
+01567  0B04  20 5D 0A              JSR     CHECK1
+01568  0B07             
+01569  0B07  4A                    LSR
+01570  0B08  D0 72      XEST       BNE     REST
+01571  0B0A             
+01572  0B0A                        ;       DRIVE CHECK WITH UI ON THE COMMAND CHANNEL (FOR IEC DEVICES)
+01573  0B0A             
+01574  0B0A  A9 01                 LDA     #$01
+01575  0B0C  A0 0F                 LDY     #$0F
+01576  0B0E  20 BA FF              JSR     $FFBA
+01577  0B11             
+01578  0B11  0A                    ASL
+01579  0B12  A2 EB                 LDX     #<UIN
+01580  0B14  A0 0B                 LDY     #>UIN
+01581  0B16  20 BD FF              JSR     $FFBD
+01582  0B19             
+01583  0B19  4C C0 FF              JMP     $FFC0
+01584  0B1C             
+01585  0B1C                        ;       DRIVE CHECK
+01586  0B1C             
+01587  0B1C  A9 20      DRIVE      LDA     #$20
+01588  0B1E  8D A5 0A              STA     KERL
+01589  0B21             
+01590  0B21  20 8C 0A              JSR     CHECK2
+01591  0B24             
+01592  0B24  4A                    LSR
+01593  0B25  F0 5A                 BEQ     TEST
+01594  0B27             
+01595  0B27  4A                    LSR
+01596  0B28  F0 03                 BEQ     SWAP
+01597  0B2A             
+01598  0B2A                        ;       SELF-MODIFICATION (FROM VDOS TO SJLOAD)
+01599  0B2A             
+01600  0B2A  20 7D CF   SJLD       JSR     $CF7D
+01601  0B2D             
+01602  0B2D                        ;       IT WORKS AROUND A KERNAL BUG: FUNCTION $FF8A ($FD15) DESTROYS
+01603  0B2D                        ;       32 BYTES AT $FD30-$FD4F THAT NEED TO BE RESTORED:
+01604  0B2D             
+01605  0B2D  A0 59      SWAP       LDY     #$59
+01606  0B2F  8C 72 CF              STY     $CF72
+01607  0B32  B9 00 CD   SWLP       LDA     $CD00,Y
+01608  0B35  99 75 CF              STA     $CF75,Y
+01609  0B38  88                    DEY
+01610  0B39  10 F7                 BPL     SWLP
+01611  0B3B             
+01612  0B3B                        ;       SWAPPING $C000 AND $F000
+01613  0B3B             
+01614  0B3B  78         RWAP       SEI
+01615  0B3C  20 52 0B   SWAR       JSR     SWAX
+01616  0B3F             
+01617  0B3F  A9 60                 LDA     #$60
+01618  0B41  8D 72 FF              STA     $FF72
+01619  0B44  CD 72 FF              CMP     $FF72
+01620  0B47  F0 06                 BEQ     SWAQ
+01621  0B49             
+01622  0B49  8D EB 02              STA     $02EB
+01623  0B4C  8D D4 09              STA     SWP
+01624  0B4F             
+01625  0B4F  20 D4 09   SWAQ       JSR     SWP
+01626  0B52             
+01627  0B52  A9 0B      SWAX       LDA     #$0B
+01628  0B54  4D D7 09              EOR     SWC+1
+01629  0B57  8D D7 09              STA     SWC+1
+01630  0B5A             
+01631  0B5A  A9 0B                 LDA     #$0B
+01632  0B5C  4D DD 09              EOR     SWD+1
+01633  0B5F  8D DD 09              STA     SWD+1
+01634  0B62             
+01635  0B62  A9 CF                 LDA     #$CF
+01636  0B64  4D F4 09              EOR     SWYNC+1
+01637  0B67  8D F4 09              STA     SWYNC+1
+01638  0B6A             
+01639  0B6A  A9 1F                 LDA     #$1F
+01640  0B6C  4D FA 09              EOR     SWYND+1
+01641  0B6F  8D FA 09              STA     SWYND+1
+01642  0B72             
+01643  0B72  A9 2F                 LDA     #$2F
+01644  0B74  85 00                 STA     $00
+01645  0B76             
+01646  0B76  A9 02                 LDA     #$02
+01647  0B78  45 01                 EOR     $01
+01648  0B7A  85 01                 STA     $01
+01649  0B7C             
+01650  0B7C  60         REST       RTS
+01651  0B7D             
+01652  0B7D  D0 AB      SJLOAD     BNE     SJLD
+01653  0B7F  D0 AC      VDOS       BNE     SWAP
+01654  0B81             
+01655  0B81                        ;       DRIVE TEST (READING BACK FROM COMMAND CHANNEL AFTER THE UI)
+01656  0B81             
+01657  0B81  A6 90      TEST       LDX     $90
+01658  0B83  D0 13                 BNE     XOMM
+01659  0B85             
+01660  0B85  E8                    INX
+01661  0B86  20 C6 FF              JSR     $FFC6
+01662  0B89             
+01663  0B89  20 CF FF   COMP       JSR     $FFCF
+01664  0B8C  8D 00 0C   CPC        STA     $0C00
+01665  0B8F             
+01666  0B8F  A5 90                 LDA     $90
+01667  0B91  D0 05                 BNE     XOMM
+01668  0B93             
+01669  0B93  EE 8D 0B              INC     CPC+1
+01670  0B96  10 F1                 BPL     COMP
+01671  0B98             
+01672  0B98  20 E7 FF   XOMM       JSR     $FFE7
+01673  0B9B             
+01674  0B9B  A2 58      XLP        LDX     #$58
+01675  0B9D  BD 80 0C   ZLP        LDA     $0C80,X
+01676  0BA0  95 68                 STA     $68,X
+01677  0BA2  CA                    DEX
+01678  0BA3  10 F8                 BPL     ZLP
+01679  0BA5             
+01680  0BA5  86 AA                 STX     $AA
+01681  0BA7             
+01682  0BA7  E6 AA      JIFFY      INC     $AA
+01683  0BA9             
+01684  0BA9  E8         FLP1       INX
+01685  0BAA  E0 08                 CPX     #$08
+01686  0BAC  B0 21                 BCS     NOCK
+01687  0BAE             
+01688  0BAE  AC 8D 0B              LDY     CPC+1
+01689  0BB1             
+01690  0BB1  88         FLP2       DEY
+01691  0BB2  30 F5                 BMI     FLP1
+01692  0BB4             
+01693  0BB4  BD DB 0B              LDA     STAB1,X
+01694  0BB7  D9 00 0C              CMP     $0C00,Y
+01695  0BBA  D0 F5                 BNE     FLP2
+01696  0BBC  BD E3 0B              LDA     STAB2,X
+01697  0BBF  D9 01 0C              CMP     $0C01,Y
+01698  0BC2  D0 ED                 BNE     FLP2
+01699  0BC4             
+01700  0BC4  E0 04                 CPX     #$04
+01701  0BC6  90 DF                 BCC     JIFFY
+01702  0BC8             
+01703  0BC8                        ;       LSB OF A REG: 0 - EM OR VI / 1 - 1541 OR 1571
+01704  0BC8             
+01705  0BC8  8A                    TXA
+01706  0BC9  4A                    LSR
+01707  0BCA             
+01708  0BCA                        ;       $02A6: 0 - NTSC / 1 - PAL
+01709  0BCA                        ;       $FF: 0 - DTV FOUND / 1 - DTV NOT FOUND (LB OF LOAD VECTOR)
+01710  0BCA             
+01711  0BCA  2D A6 02              AND     $02A6
+01712  0BCD  25 FF                 AND     $FF
+01713  0BCF             
+01714  0BCF                        ;       $AA: 0 - JIFFY NOT FOUND / 1 - JIFFY FOUND
+01715  0BCF             
+01716  0BCF  25 AA      NOCK       AND     $AA
+01717  0BD1  D0 AA                 BNE     SJLOAD
+01718  0BD3             
+01719  0BD3  8A                    TXA
+01720  0BD4  29 02                 AND     #$02
+01721  0BD6  D0 A7                 BNE     VDOS
+01722  0BD8             
+01723  0BD8  4C A5 0A   KERNAL     JMP     KERL
+01724  0BDB             
+01725  0BDB                        ;       JI,FL,CM,IE,EM,VI,54,57
+01726  0BDB                        ;       (JIFFY, FLYER, CMD, IEC, EMULATION, VICE/VIRTUAL, 1541, 1571)
+01727  0BDB             
+01728  0BDB  4A 46 43   STAB1      BYTE    $4A,$46,$43,$49,$44,$56,$35,$35
+01729  0BE3  49 4C 4D   STAB2      BYTE    $49,$4C,$4D,$45,$4D,$49,$34,$37
+01730  0BEB             
+01731  0BEB                        ;       "UI" (SOFT RESET FOR DRIVE IDENTIFICATION)
+01732  0BEB             
+01733  0BEB  55 49      UIN        BYTE    $55,$49
+01734  0BED             
+01735  0BED             *=$0BED
+01736  0BED             
+01737  0BED                        ;       ----------------------------------------
+01738  0BED                        ;       SETUP INIT (ENTRY POINT FOR BASIC)
+01739  0BED                        ;       ----------------------------------------
+01740  0BED             
+01741  0BED                        ;       SYS4296
+01742  0BED             
+01743  0BED  A5 2C                 LDA     $2C
+01744  0BEF  48                    PHA
+01745  0BF0             
+01746  0BF0  A9 26                 LDA     #$26
+01747  0BF2  A2 03                 LDX     #$03
+01748  0BF4  85 0C                 STA     $0C
+01749  0BF6  86 0D                 STX     $0D
+01750  0BF8             
+01751  0BF8  A0 16                 LDY     #$16
+01752  0BFA  A2 09                 LDX     #$09
+01753  0BFC             
+01754  0BFC  B1 2B      BTP        LDA     ($2B),Y
+01755  0BFE  91 0C                 STA     ($0C),Y
+01756  0C00  C8                    INY
+01757  0C01  D0 F9                 BNE     BTP
+01758  0C03             
+01759  0C03  E6 2C                 INC     $2C
+01760  0C05  E6 0D                 INC     $0D
+01761  0C07  CA                    DEX
+01762  0C08  D0 F2                 BNE     BTP
+01763  0C0A             
+01764  0C0A  68                    PLA
+01765  0C0B  85 2C                 STA     $2C
+01766  0C0D             
+01767  0C0D  4C 3C 03              JMP     SETUP
+01768  0C10             
+01769  0C10                        ;       (* = $0C10)
+01770  0C10             
+01771  0C10                        ;       COMPILED WITH CBM PRG STUDIO V3.13 (BY ARTHUR JORDISON)
+01772  0C10                        ;       HTTP://AJORDISON.CO.UK/
+01773  0C10             
+01774  0C10                        ;       ROSETTA INTERACTIVE FICTION PROJECT HOMEPAGE:
+01775  0C10             
+01776  0C10                        ;       HTTP://ISTENNYILA.HU/ROSETTA
+01777  0C10             
+01778  0C10                        ;       V0.13 (C) 2012-2019 BY ROBERT OLESSAK
+01779  0C10             
+01780  0C10                        ;       SDOS PROJECT PAGE:
+01781  0C10             
+01782  0C10                        ;       HTTP://ISTENNYILA.HU/SDOS
+01783  0C10             
