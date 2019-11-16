@@ -36,6 +36,13 @@ describes several of the commerical fast load protocols.
   - Original source: <http://istennyila.hu/stuff/sdos.zip>.
   - License: "Public Domain: open-source and freeware."
 
+- [__SJLOAD__](sjload) (2008?). JiffyDOS fast loader; drive must be
+  JiffyDOS-compatible. No DOS wedge. No longer maintained by original
+  author. May be somewhat buggy ("far from completed"), e.g., crash if
+  loading >195 blocks and loading below $0801 not supported. Based on
+  VDOS (1986).
+  - Web page: <https://www.c64-wiki.com/wiki/SJLOAD>
+
 
 
 <!-------------------------------------------------------------------->
